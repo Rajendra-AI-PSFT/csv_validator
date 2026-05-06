@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSV Validator & Corrector</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container { 
+            background: white;
+            border-radius: 10px; 
+            padding: 30px; 
+            max-width: 800px;
+            width: 100%;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+        h1 { color: #333; margin-bottom: 10px; }
+        .subtitle { color: #666; margin-bottom: 20px; font-size: 14px; }
+        .upload-area {
+            border: 2px dashed #667eea;
+            border-radius: 8px;
+            padding: 30px;
+            text-align: center;
+            background: #f8f9ff;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 20px;
+        }
+        .upload-area:hover { 
+            border-color: #764ba2;
+            background: #f0f2ff;
+        }
+        .upload-area.dragover {
+            border-color: #764ba2;
+            background: #e8ebf5;
+        }
+        input[type="file"] { display: none; }
+        .file-name { 
+            color: #667eea; 
+            font-weight: bold;
+            margin-top: 10px;
+            display: none;
+        }
+        .button-group { display: flex; gap: 10px; flex-wrap: wrap; }
+        button { 
+            padding: 10px 20px; 
+            background: #667eea; 
+            color: white; 
+            border: none; 
+            cursor: pointer; 
+            border-radius: 5px;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+        button:hover { background: #764ba2; }
+        button:disabled { 
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .download-btn { 
+            background: #28a745;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+        .download-btn:hover { background: #218838; }
+        #result { 
+            margin-top: 20px; 
+            padding: 15px; 
+            border-radius: 5px;
+            display: none;
+        }
+        #result.success { 
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        #result.error { 
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        #result.warning { 
+            background: #fff3cd;
+            border: 1px solid #ffeeba;
+            color: #856404;
+        }
+        #result h3 { margin-bottom: 10px; }
+        #result p { margin: 8px 0; }
+        .issues { 
+            background: white;
+            padding: 15px; 
+            margin-top: 15px; 
+            border-radius: 5px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .issue-item { 
+            padding: 8px;
+            margin: 5px 0; 
+            background: #fffacd;
+            border-left: 4px solid #ffc107;
+            font-size: 13px;
+            border-radius: 3px;
+        }
+        .issue-item code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 3px;
+            word-break: break-all;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin: 15px 0;
+        }
+        .stat-box {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            border-left: 4px solid #667eea;
+        }
+        .stat-box strong { color: #667eea; }
+        .loading { display: none; text-align: center; margin: 10px 0; }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 CSV Validator & Corrector</h1>
+        <p class="subtitle">Upload a CSV, XLSX, or XLS file to validate and correct newline characters</p>
+        
+        <form id="uploadForm">
+            <div class="upload-area" id="uploadArea">
+                <div>📁 Click to upload or drag & drop</div>
+                <small>CSV, XLSX, or XLS files</small>
+                <div class="file-name" id="fileName"></div>
+            </div>
+            <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" required>
+            <div class="button-group">
+                <button type="submit" id="validateBtn">Validate & Correct</button>
+                <button type="button" id="clearBtn" style="background: #6c757d;">Clear</button>
+            </div>
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Processing file...</p>
+            </div>
+        </form>
+        
+        <div id="result"></div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const uploadArea = document.getElementById('uploadArea');
+        const fileName = document.getElementById('fileName');
+        const validateBtn = document.getElementById('validateBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const resultDiv = document.getElementById('result');
+        const loadingDiv = document.getElementById('loading');
+        let selectedFile = null;
+
+        // Drag and drop
+        uploadArea.addEventListener('click', () => fileInput.click());
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                handleFileSelect();
+            }
+        });
+
+        fileInput.addEventListener('change', handleFileSelect);
+
+        function handleFileSelect() {
+            selectedFile = fileInput.files[0];
+            if (selectedFile) {
+                fileName.textContent = `✓ Selected: ${selectedFile.name}`;
+                fileName.style.display = 'block';
+            }
+        }
+
+        clearBtn.addEventListener('click', () => {
+            fileInput.value = '';
+            fileName.style.display = 'none';
+            selectedFile = null;
+            resultDiv.style.display = 'none';
+            resultDiv.innerHTML = '';
+            loadingDiv.style.display = 'none';
+        });
+
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (!selectedFile) {
+                showResult('error', 'Please select a file first.');
+                return;
+            }
+
+            validateBtn.disabled = true;
+            loadingDiv.style.display = 'block';
+
+            try {
+                const formData = new FormData();
+                formData.append('file', selectedFile);
+
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+                loadingDiv.style.display = 'none';
+
+                if (response.ok) {
+                    displayResults(data);
+                } else {
+                    showResult('error', data.error || 'Error processing file');
+                }
+            } catch (err) {
+                loadingDiv.style.display = 'none';
+                showResult('error', `Error: ${err.message}`);
+            } finally {
+                validateBtn.disabled = false;
+            }
+        });
+
+        function displayResults(data) {
+            let html = '';
+
+            if (data.validation.has_issues) {
+                html = `
+                    <h3>⚠️ Issues Found & Corrected</h3>
+                    <div class="stats">
+                        <div class="stat-box">
+                            <strong>Total Rows:</strong> ${data.rows}
+                        </div>
+                        <div class="stat-box">
+                            <strong>Issues Found:</strong> ${data.validation.newline_count}
+                        </div>
+                    </div>
+                    <div class="issues">
+                        <strong>Details (first 20):</strong>
+                        ${data.validation.issues.slice(0, 20).map(issue => `
+                            <div class="issue-item">
+                                <strong>Row ${issue.row}, Column "${issue.column}":</strong> 
+                                <code>${escapeHtml(issue.value.substring(0, 60))}</code>
+                            </div>
+                        `).join('')}
+                        ${data.validation.issues.length > 20 ? `<p style="margin-top: 10px;"><em>... and ${data.validation.issues.length - 20} more issues</em></p>` : ''}
+                    </div>
+                    <p style="margin-top: 15px;"><strong>✓ File corrected! Download the cleaned file:</strong></p>
+                `;
+                resultDiv.className = 'warning';
+            } else {
+                html = `
+                    <h3>✓ No Issues Found</h3>
+                    <div class="stats">
+                        <div class="stat-box">
+                            <strong>Total Rows:</strong> ${data.rows}
+                        </div>
+                        <div class="stat-box">
+                            <strong>Status:</strong> Clean
+                        </div>
+                    </div>
+                    <p>Your file has no problematic newline characters.</p>
+                    <p><strong>File is ready for download:</strong></p>
+                `;
+                resultDiv.className = 'success';
+            }
+
+            html += `<a href="/download/${data.file_id}" class="download-btn" download="${data.corrected_filename}">📥 Download ${data.corrected_filename}</a>`;
+
+            resultDiv.innerHTML = html;
+            resultDiv.style.display = 'block';
+        }
+
+        function showResult(type, message) {
+            resultDiv.className = type;
+            resultDiv.innerHTML = `<h3>${escapeHtml(message)}</h3>`;
+            resultDiv.style.display = 'block';
+            loadingDiv.style.display = 'none';
+        }
+
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return String(text).replace(/[&<>"']/g, m => map[m]);
+        }
+    </script>
+</body>
+</html>
