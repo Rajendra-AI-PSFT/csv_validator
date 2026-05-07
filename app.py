@@ -1,11 +1,11 @@
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, render_template
 import pandas as pd
 from io import BytesIO, StringIO
 import os
 import uuid
 from werkzeug.utils import secure_filename
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='templates')
 
 # Configuration
 UPLOAD_FOLDER = 'temp_uploads'
@@ -26,7 +26,7 @@ def allowed_file(filename):
 
 @app.route('/')
 def index():
-    return send_file('templates/index.html')
+    return render_template('index.html')
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
